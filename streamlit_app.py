@@ -1,151 +1,111 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# Set up premium clinic branding
+st.set_page_config(page_title="Smile Care Dental Clinic", page_icon="🦷", layout="centered")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+st.title("🦷 SMILE CARE DENTAL CLINIC")
+st.caption("Your Premium Dental & Implant Care Partner")
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# --- INITIALIZE DATABASE IN SESSION STATE ---
+if "patient_db" not in st.session_state:
+    st.session_state.patient_db = {
+        "9876543210": {"id": "PT101", "name": "Amit Gupta", "points": 350},
+        "9999988888": {"id": "PT102", "name": "Suresh Sharma", "points": 120}
+    }
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# --- SIDEBAR: STAFF / ADMIN PANEL ---
+st.sidebar.header("🛡️ Staff Control Panel")
+admin_action = st.sidebar.selectbox("Choose Action", ["Patient Lookup", "Add New Patient", "Manage Points"])
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
+if admin_action == "Add New Patient":
+    st.sidebar.subheader("Register New Account")
+    new_id = st.sidebar.text_input("Patient ID (e.g., PT103)")
+    new_name = st.sidebar.text_input("Patient Full Name")
+    new_phone = st.sidebar.text_input("Mobile Number (10 digits)")
+    
+    if st.sidebar.button("Register Patient"):
+        if new_id and new_name and len(new_phone) == 10:
+            st.session_state.patient_db[new_phone] = {"id": new_id, "name": new_name, "points": 0}
+            st.sidebar.success(f"Successfully registered {new_name}!")
         else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+            st.sidebar.error("Please fill all fields correctly (Phone must be 10 digits).")
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
+elif admin_action == "Manage Points":
+    st.sidebar.subheader("Update Loyalty Wallet")
+    search_phone = st.sidebar.text_input("Enter Patient Mobile Number")
+    
+    if search_phone in st.session_state.patient_db:
+        patient = st.session_state.patient_db[search_phone]
+        st.sidebar.text(f"Patient: {patient['name']} ({patient['id']})")
+        st.sidebar.text(f"Current Balance: {patient['points']} Points")
+        
+        # Add points section
+        amount_spent = st.sidebar.number_input("Treatment Amount Spent (₹)", min_value=0, step=100)
+        if st.sidebar.button("➕ Calculate & Add Points"):
+            earned_points = int(amount_spent / 100)  # 1 Point per ₹100
+            st.session_state.patient_db[search_phone]["points"] += earned_points
+            st.sidebar.success(f"Added {earned_points} points! New Balance: {st.session_state.patient_db[search_phone]['points']}")
+            st.rerun()
+            
+        # Redeem points section
+        points_to_redeem = st.sidebar.number_input("Points to Redeem (₹1 discount per point)", min_value=0, max_value=patient['points'], step=10)
+        if st.sidebar.button("🛑 Redeem Points Automatically"):
+            st.session_state.patient_db[search_phone]["points"] -= points_to_redeem
+            st.sidebar.success(f"Redeemed {points_to_redeem} points successfully!")
+            st.sidebar.info(f"Apply a discount of ₹{points_to_redeem} to the current invoice.")
+            st.rerun()
+    elif search_phone:
+        st.sidebar.error("Patient phone number not found.")
+
+# --- SIDEBAR: PATIENT LOGIN ---
+st.sidebar.markdown("---")
+st.sidebar.header("📱 Patient Login")
+mobile_input = st.sidebar.text_input("Enter Mobile Number to View Account", placeholder="e.g., 9876543210")
+
+if mobile_input in st.session_state.patient_db:
+    current_user = st.session_state.patient_db[mobile_input]["name"]
+    current_points = st.session_state.patient_db[mobile_input]["points"]
+    current_id = st.session_state.patient_db[mobile_input]["id"]
+    st.sidebar.success(f"Logged in as: {current_user} ({current_id})")
+else:
+    current_user = "Valued Guest"
+    current_points = 0
+    current_id = "N/A"
+
+# --- MAIN INTERFACE TABS ---
+tab1, tab2, tab3 = st.tabs(["💳 Loyalty Wallet", "📅 Book Appointment", "💬 Message Support"])
+
+# TAB 1: LOYALTY WALLET
+with tab1:
+    st.markdown(f"### Welcome back, {current_user}!")
+    st.caption(f"Patient ID: {current_id}")
+    
+    with st.container():
+        st.markdown(
+            f"""
+            <div style="background-color:#1e3d59; padding:25px; border-radius:15px; border-left: 8px solid #ffc13b; color: white;">
+                <p style="text-transform: uppercase; letter-spacing: 2px; font-size: 12px; margin: 0; color: #ffc13b;">Luxury Loyalty Card</p>
+                <h4 style="margin: 10px 0 5px 0; color: white;">Your Balance</h4>
+                <h1 style="font-size: 48px; margin: 0; color: #ffc13b;">{current_points} <span style="font-size:20px; color:white;">Points</span></h1>
+                <p style="font-size: 14px; opacity: 0.8; margin: 10px 0 0 0;">Redeemable Value: ₹{current_points}</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
         )
+    st.info("✨ 1 Point earned for every ₹100 spent on dental treatments.")
+
+# TAB 2: BOOK APPOINTMENT (UPDATED TIME SLOTS)
+with tab2:
+    st.markdown("### Schedule Your Next Visit")
+    st.date_input("Select Preferred Date")
+    st.selectbox("Select Time Slot", [
+        "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", 
+        "6:00 PM", "7:00 PM", "8:00 PM"
+    ])
+    st.button("Confirm Request")
+
+with tab3:
+    st.markdown("### Secure Chat with Front Desk")
+    st.text_input("Type your question here:")
+    st.button("Send Message")
+    
